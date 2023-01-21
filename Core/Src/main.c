@@ -47,12 +47,13 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-//コントローラ関?��?
+//コントローラ関係
 extern rc_info_t rc;
 uint8_t buf[200];
 uint8_t tmp[8];
 
 //CAN関?��?
+
 CAN_TxHeaderTypeDef   TxHeader;
 CAN_RxHeaderTypeDef   RxHeader;
 
@@ -61,6 +62,14 @@ uint8_t               RxData[8];
 uint32_t              TxMailbox;
 
 int16_t motorPower[8]={0x0000};
+
+//動作モードの定義
+enum OperatingMode {
+	stop=0, //完全停止（モータを一切動かさない）
+	move=1, //足回り動作
+	launch=2 //射出
+};
+uint8_t mode; //動作モード
 
 /* USER CODE END PV */
 
@@ -73,6 +82,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+//出力設定部分
 int8_t SetMotorPower(uint8_t motorID,int16_t power){
 	uint8_t MaxmotorID=7;
 	uint8_t MinmotorID=0;
@@ -85,6 +95,7 @@ int8_t SetMotorPower(uint8_t motorID,int16_t power){
 
 }
 
+//CAN出力部分
 void CANOutPut(){
 	if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&hcan1)){
 			TxHeader.RTR = CAN_RTR_DATA;
@@ -106,6 +117,21 @@ void CANOutPut(){
 			}
 			//HAL_Delay(1);
 		}
+}
+
+//足回り
+void MoveFoot(int16_t x,int16_t y,int16_t theta){
+
+}
+
+//ピッチ角調整
+void MovePich(int16_t pitch){
+
+}
+
+//射出
+void MoveLaunch(){
+
 }
 
 /* USER CODE END 0 */
@@ -168,6 +194,16 @@ int main(void)
 		val=(int16_t)rc.ch1*0x01FF/660;
 		sprintf(buf, "CH1: %4d  CH2: %4d  CH3: %4d  CH4: %4d  SW1: %1d  SW2: %1d %x\r\n", rc.ch1, rc.ch2, rc.ch3, rc.ch4, rc.sw1, rc.sw2,val);
 		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
+
+		mode=rc.sw1; // 動作モード設定
+
+		if(mode==move||mode==launch){
+
+		}
+
+		if(mode==launch){
+
+		}
 
 		sprintf(buf,"%x%x  %x%x ",tmp[0],tmp[1],tmp[2],tmp[3]);
 		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
