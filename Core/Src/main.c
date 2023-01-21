@@ -50,6 +50,7 @@
 //コントローラ関?��?
 extern rc_info_t rc;
 uint8_t buf[200];
+uint8_t tmp[8];
 
 //CAN関?��?
 CAN_TxHeaderTypeDef   TxHeader;
@@ -59,7 +60,7 @@ uint8_t               TxData[8];
 uint8_t               RxData[8];
 uint32_t              TxMailbox;
 
-uint16_t motorPower[8]={0xFFFF,0x3F00};
+int16_t motorPower[8]={0x0000};
 
 /* USER CODE END PV */
 
@@ -72,7 +73,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-int8_t SetMotorPower(uint8_t motorID,uint16_t power){
+int8_t SetMotorPower(uint8_t motorID,int16_t power){
 	uint8_t MaxmotorID=7;
 	uint8_t MinmotorID=0;
 
@@ -82,30 +83,29 @@ int8_t SetMotorPower(uint8_t motorID,uint16_t power){
 
 	motorPower[motorID]=power;
 
+}
+
+void CANOutPut(){
 	if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&hcan1)){
-		TxHeader.RTR = CAN_RTR_DATA;
-		TxHeader.IDE = CAN_ID_STD;
-		TxHeader.DLC = 8;
-		TxHeader.TransmitGlobalTime = DISABLE;
+			TxHeader.RTR = CAN_RTR_DATA;
+			TxHeader.IDE = CAN_ID_STD;
+			TxHeader.DLC = 8;
+			TxHeader.TransmitGlobalTime = DISABLE;
 
-		if(motorID<(MaxmotorID+1)/2){
-			TxHeader.StdId = 0x200;
-			for(uint8_t i=0;i<4;i++){
-				TxData[i*2]=motorPower[i]>>8;
-				TxData[i*2+1]=motorPower[i];
+				TxHeader.StdId = 0x200;
+				for(uint8_t i=0;i<4;i++){
+					TxData[i*2]=motorPower[i]>>8;
+					TxData[i*2+1]=motorPower[i];
+					tmp[i*2]=motorPower[i]>>8;
+					tmp[i*2+1]=motorPower[i];
+				}
+
+			if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+			{
+				Error_Handler();
 			}
-
-		}else{
-			TxHeader.StdId = 0x1FF;
+			//HAL_Delay(1);
 		}
-
-		if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
-		{
-			Error_Handler();
-		}
-		//HAL_Delay(1);
-	}
-
 }
 
 /* USER CODE END 0 */
@@ -123,7 +123,8 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+
+	HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -164,19 +165,20 @@ int main(void)
     /* USER CODE BEGIN 3 */
 		uart_receive_handler(&huart1); //コントローラ値 受信
 
-		val=abs((uint16_t)rc.ch1)*0x02FF/660;
+		val=(int16_t)rc.ch1*0x01FF/660;
 		sprintf(buf, "CH1: %4d  CH2: %4d  CH3: %4d  CH4: %4d  SW1: %1d  SW2: %1d %x\r\n", rc.ch1, rc.ch2, rc.ch3, rc.ch4, rc.sw1, rc.sw2,val);
 		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
 
+		sprintf(buf,"%x%x  %x%x ",tmp[0],tmp[1],tmp[2],tmp[3]);
+		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
 
-		SetMotorPower(0,val);
+		SetMotorPower(0,-val);
 		SetMotorPower(1,val);
 		SetMotorPower(2,val);
 		SetMotorPower(3,val);
-		for(int i=0;i<8;i++){
-			sprintf(buf,"%x ",TxData[i]);
-			HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
-		}
+
+		CANOutPut();
+
 		//	SetMotorPower(2,rc.ch1*0x2FFF/660);
 
 //		if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&hcan1)){
@@ -193,10 +195,13 @@ int main(void)
 //		    TxData[5] = 0x66;
 //		    TxData[6] = 0x77;
 //		    TxData[7] = 0x88;
-//		    HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox);
+//		    if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+//		    			{
+//		    				Error_Handler();
+//		    			}
 //		}
 
-		//HAL_Delay(10);
+//		HAL_Delay(10);
 		HAL_GPIO_TogglePin(LED_R_GPIO_Port, LED_R_Pin); //Lチカ
 //		HAL_Delay(30);
 	}
