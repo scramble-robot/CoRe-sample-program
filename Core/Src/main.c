@@ -21,6 +21,7 @@
 #include "main.h"
 #include "can.h"
 #include "dma.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -47,12 +48,12 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-//コントローラ関係
+//コントローラ関??��?��?
 extern rc_info_t rc;
 uint8_t buf[200];
 uint8_t tmp[8];
 
-//CAN関?��?
+//CAN関????��?��??��?��???��?��??��?��?
 
 CAN_TxHeaderTypeDef   TxHeader;
 CAN_RxHeaderTypeDef   RxHeader;
@@ -63,13 +64,13 @@ uint32_t              TxMailbox;
 
 int16_t motorPower[8]={0x0000};
 
-//動作モードの定義
+//動作モード�???��?��定義
 enum OperatingMode {
-	stop=0, //完全停止（モータを一切動かさない）
-	move=1, //足回り動作
-	launch=2 //射出
+	stop=0, //完�???��?��停止???��?��??��?��モータを�???��?��?動かさな??��?��???��?��?
+	move=1, //足回り動�?
+	launch=2 //??��?��?出
 };
-uint8_t mode; //動作モード
+uint8_t mode; //動作モー??��?��?
 
 /* USER CODE END PV */
 
@@ -82,7 +83,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-//出力設定部分
+//出力設定部??��?��?
 int8_t SetMotorPower(uint8_t motorID,int16_t power){
 	uint8_t MaxmotorID=7;
 	uint8_t MinmotorID=0;
@@ -95,7 +96,7 @@ int8_t SetMotorPower(uint8_t motorID,int16_t power){
 
 }
 
-//CAN出力部分
+//CAN出力部??��?��?
 void CANOutPut(){
 	if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&hcan1)){
 			TxHeader.RTR = CAN_RTR_DATA;
@@ -129,7 +130,7 @@ void MovePich(int16_t pitch){
 
 }
 
-//射出
+//??��?��?出
 void MoveLaunch(){
 
 }
@@ -149,8 +150,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-
-	HAL_Init();
+  HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -164,13 +164,28 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_CAN1_Init();
   MX_DMA_Init();
+  MX_CAN1_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 	/* open dbus uart receive it */
 	dbus_uart_init();
+
+	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+	float pwm_power=71*2.0/10.0;
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_power);
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pwm_power);
+	HAL_Delay(2000);
+	pwm_power=71*1/10.0;
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_power);
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pwm_power);
+	HAL_Delay(2000);
+	pwm_power=71*1.7/10.0;
+	float pwm_power2=71*1.8/10.0;
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_power2);
+	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pwm_power);
 
 	HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin,GPIO_PIN_RESET);
 	sprintf(buf,"Start up\n");
@@ -195,7 +210,12 @@ int main(void)
 		sprintf(buf, "CH1: %4d  CH2: %4d  CH3: %4d  CH4: %4d  SW1: %1d  SW2: %1d %x\r\n", rc.ch1, rc.ch2, rc.ch3, rc.ch4, rc.sw1, rc.sw2,val);
 		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
 
-		mode=rc.sw1; // 動作モード設定
+		mode=rc.sw1; // 動作モード設??��?��?
+
+		//100Hz to 10ms
+		//1ms to 2ms 1.5ms
+		float pwm_power=9999*1.7/10.0;
+
 
 		if(mode==move||mode==launch){
 
@@ -208,20 +228,20 @@ int main(void)
 		sprintf(buf,"%x%x  %x%x ",tmp[0],tmp[1],tmp[2],tmp[3]);
 		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
 
-		SetMotorPower(0,-val);
-		SetMotorPower(1,val);
-		SetMotorPower(2,val);
-		SetMotorPower(3,val);
-
-		CANOutPut();
+//		SetMotorPower(0,-val);
+//		SetMotorPower(1,val);
+//		SetMotorPower(2,val);
+//		SetMotorPower(3,val);
+//
+//		CANOutPut();
 
 		//	SetMotorPower(2,rc.ch1*0x2FFF/660);
 
 //		if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&hcan1)){
 //		    TxHeader.StdId = 0x200;                 // CAN ID
-//		    TxHeader.RTR = CAN_RTR_DATA;            // フレームタイプはデータフレーム
-//		    TxHeader.IDE = CAN_ID_STD;              // 標準ID(11ﾋﾞｯﾄ)
-//		    TxHeader.DLC = 8;                       // データ長は8バイトに
+//		    TxHeader.RTR = CAN_RTR_DATA;            // フレー??��?��?タイプ�???��?��??��?��?ータフレー??��?��?
+//		    TxHeader.IDE = CAN_ID_STD;              // 標準ID(11???��?��??��?��??��?��?��???��?��?)
+//		    TxHeader.DLC = 8;                       // ??��?��?ータ長は8バイトに
 //		    TxHeader.TransmitGlobalTime = DISABLE;  // ???
 //		    TxData[0] = 0x11;
 //		    TxData[1] = 0x22;
@@ -258,6 +278,7 @@ void SystemClock_Config(void)
   */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
@@ -273,6 +294,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
@@ -322,6 +344,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
-
