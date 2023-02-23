@@ -28,6 +28,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "bsp_uart.h"
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,7 +63,7 @@ uint8_t               TxData[8];
 uint8_t               RxData[8];
 uint32_t              TxMailbox;
 
-int16_t motorPower[8]={0x0000};
+int16_t motorPower[8]={};
 
 //動作モード�???��?��定義
 enum OperatingMode {
@@ -72,6 +73,9 @@ enum OperatingMode {
 };
 uint8_t mode; //動作モー??��?��?
 
+static const uint16_t PwmPeriod = 57600;
+static const uint16_t ServoAngle0 = PwmPeriod * 0.5 / 20.0;
+static const uint16_t ServoAngle180 = PwmPeriod * 2.4 / 20.0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -91,33 +95,44 @@ int8_t SetMotorPower(uint8_t motorID,int16_t power){
 	if((motorID<MinmotorID)||(MaxmotorID<motorID)){
 		return -1;
 	}
-
 	motorPower[motorID]=power;
-
 }
 
 //CAN出力部??��?��?
 void CANOutPut(){
 	if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&hcan1)){
-			TxHeader.RTR = CAN_RTR_DATA;
-			TxHeader.IDE = CAN_ID_STD;
-			TxHeader.DLC = 8;
-			TxHeader.TransmitGlobalTime = DISABLE;
+		TxHeader.RTR = CAN_RTR_DATA;
+		TxHeader.IDE = CAN_ID_STD;
+		TxHeader.DLC = 8;
+		TxHeader.TransmitGlobalTime = DISABLE;
 
-				TxHeader.StdId = 0x200;
-				for(uint8_t i=0;i<4;i++){
-					TxData[i*2]=motorPower[i]>>8;
-					TxData[i*2+1]=motorPower[i];
-					tmp[i*2]=motorPower[i]>>8;
-					tmp[i*2+1]=motorPower[i];
-				}
-
-			if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
-			{
-				Error_Handler();
-			}
-			//HAL_Delay(1);
+		TxHeader.StdId = 0x200;
+		for(uint8_t i=0;i<4;i++){
+			TxData[i*2]=motorPower[i]>>8;
+			TxData[i*2+1]=motorPower[i];
+			tmp[i*2]=motorPower[i]>>8;
+			tmp[i*2+1]=motorPower[i];
 		}
+
+		if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+		{
+			Error_Handler();
+		}
+
+		TxHeader.StdId = 0x1FF;
+		for(uint8_t i=0;i<4;i++){
+			TxData[i*2]=motorPower[i+4]>>8;
+			TxData[i*2+1]=motorPower[i+4];
+			tmp[i*2]=motorPower[i+4]>>8;
+			tmp[i*2+1]=motorPower[i+4];
+		}
+
+		if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+		{
+			Error_Handler();
+		}
+
+	}
 }
 
 //足回り
@@ -133,6 +148,24 @@ void MovePich(int16_t pitch){
 //??��?��?出
 void MoveLaunch(){
 
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) //GPIO割込みピン入力割込み
+{
+	if (GPIO_Pin == GPIO_PIN_0)
+	{
+		StateSW[0]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+	}else if(GPIO_Pin == GPIO_PIN_1){
+		StateSW[1]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1);
+	}else if(GPIO_Pin == GPIO_PIN_2){
+		StateSW[2]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_2);
+	}else if(GPIO_Pin == GPIO_PIN_3){
+		StateSW[3]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3);
+	}else if(GPIO_Pin == GPIO_PIN_5){
+		StateSW[4]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5);
+	}else if(GPIO_Pin == GPIO_PIN_6){
+		StateSW[5]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_6);
+	}
 }
 
 /* USER CODE END 0 */
@@ -189,7 +222,7 @@ int main(void)
 
 	HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin,GPIO_PIN_RESET);
 	sprintf(buf,"Start up\n");
-//	HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
+	//	HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
 
 	HAL_CAN_Start(&hcan1);
 	uint16_t val;
@@ -225,7 +258,7 @@ int main(void)
 
 		}
 
-		sprintf(buf,"%x%x  %x%x ",tmp[0],tmp[1],tmp[2],tmp[3]);
+		sprintf(buf,"%x%x  %x%x ",StateSW[0],tmp[1],tmp[2],tmp[3]);
 		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
 
 //		SetMotorPower(0,-val);
@@ -259,7 +292,7 @@ int main(void)
 
 //		HAL_Delay(10);
 		HAL_GPIO_TogglePin(LED_R_GPIO_Port, LED_R_Pin); //Lチカ
-//		HAL_Delay(30);
+		//		HAL_Delay(30);
 	}
 
   /* USER CODE END 3 */
