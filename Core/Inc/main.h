@@ -66,6 +66,7 @@ void Error_Handler(void);
 #define LED_G_GPIO_Port GPIOF
 #define OLED_RST_Pin GPIO_PIN_10
 #define OLED_RST_GPIO_Port GPIOB
+
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
@@ -75,5 +76,3 @@ void Error_Handler(void);
 #endif
 
 #endif /* __MAIN_H */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
