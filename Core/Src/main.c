@@ -49,12 +49,12 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-//コントローラ関??��?��?
+//コントローラ関???��?��??��?��?
 extern rc_info_t rc;
 uint8_t buf[200];
 uint8_t tmp[8];
 
-//CAN関????��?��??��?��???��?��??��?��?
+//CAN関?????��?��??��?��???��?��??��?��????��?��??��?��???��?��??��?��?
 
 CAN_TxHeaderTypeDef   TxHeader;
 CAN_RxHeaderTypeDef   RxHeader;
@@ -65,13 +65,13 @@ uint32_t              TxMailbox;
 
 int16_t motorPower[8]={};
 
-//動作モード�???��?��定義
+//動作モード�????��?��??��?��定義
 enum OperatingMode {
-	stop=0, //完�???��?��停止???��?��??��?��モータを�???��?��?動かさな??��?��???��?��?
+	stop=0, //完�????��?��??��?��停止????��?��??��?��???��?��??��?��モータを�????��?��??��?��?動かさな???��?��??��?��????��?��??��?��?
 	move=1, //足回り動�?
-	launch=2 //??��?��?出
+	launch=2 //???��?��??��?��?出
 };
-uint8_t mode; //動作モー??��?��?
+uint8_t mode; //動作モー???��?��??��?��?
 
 static const uint16_t PwmPeriod = 57600;
 static const uint16_t ServoAngle0 = PwmPeriod * 0.5 / 20.0;
@@ -87,7 +87,7 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-//出力設定部??��?��?
+//出力設定部???��?��??��?��?
 int8_t SetMotorPower(uint8_t motorID,int16_t power){
 	uint8_t MaxmotorID=7;
 	uint8_t MinmotorID=0;
@@ -98,7 +98,7 @@ int8_t SetMotorPower(uint8_t motorID,int16_t power){
 	motorPower[motorID]=power;
 }
 
-//CAN出力部??��?��?
+//CAN出力部???��?��??��?��?
 void CANOutPut(){
 	if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&hcan1)){
 		TxHeader.RTR = CAN_RTR_DATA;
@@ -145,27 +145,53 @@ void MovePich(int16_t pitch){
 
 }
 
-//??��?��?出
+//???��?��??��?��?出
 void MoveLaunch(){
 
 }
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) //GPIO割込みピン入力割込み
+//void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) //GPIO割込みピン入力割込み
+//{
+//	if (GPIO_Pin == GPIO_PIN_0)
+//	{
+//		StateSW[0]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+//	}else if(GPIO_Pin == GPIO_PIN_1){
+//		StateSW[1]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1);
+//	}else if(GPIO_Pin == GPIO_PIN_2){
+//		StateSW[2]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_2);
+//	}else if(GPIO_Pin == GPIO_PIN_3){
+//		StateSW[3]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3);
+//	}else if(GPIO_Pin == GPIO_PIN_5){
+//		StateSW[4]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5);
+//	}else if(GPIO_Pin == GPIO_PIN_6){
+//		StateSW[5]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_6);
+//	}
+//}
+
+int16_t v[4]={0};
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-	if (GPIO_Pin == GPIO_PIN_0)
-	{
-		StateSW[0]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
-	}else if(GPIO_Pin == GPIO_PIN_1){
-		StateSW[1]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1);
-	}else if(GPIO_Pin == GPIO_PIN_2){
-		StateSW[2]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_2);
-	}else if(GPIO_Pin == GPIO_PIN_3){
-		StateSW[3]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_3);
-	}else if(GPIO_Pin == GPIO_PIN_5){
-		StateSW[4]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5);
-	}else if(GPIO_Pin == GPIO_PIN_6){
-		StateSW[5]=HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_6);
-	}
+    if (htim == &htim10){
+		TxHeader.StdId = 0x200;                 // CAN ID
+		TxHeader.RTR = CAN_RTR_DATA;            // フレー???��?��??��?��?タイプ�????��?��??��?��???��?��??��?��?ータフレー???��?��??��?��?
+		TxHeader.IDE = CAN_ID_STD;              // 標準ID(11????��?��??��?��???��?��??��?��???��?��??��?��??��?��????��?��??��?��?)
+		TxHeader.DLC = 8;                       // ???��?��??��?��?ータ長は8バイトに
+		TxHeader.TransmitGlobalTime = DISABLE;  // ???
+		TxData[0] = v[0]>>8;
+		TxData[1] = v[0];
+		TxData[2] = v[1]>>8;
+		TxData[3] = v[1];
+		TxData[4] = v[2]>>8;
+		TxData[5] = v[2];
+		TxData[6] = v[3]>>8;
+		TxData[7] = v[3];
+		if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
+		{
+			Error_Handler();
+		}
+
+    }
 }
 
 /* USER CODE END 0 */
@@ -202,23 +228,19 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   MX_TIM2_Init();
+  MX_TIM10_Init();
   /* USER CODE BEGIN 2 */
 	/* open dbus uart receive it */
-	dbus_uart_init();
-
 	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 	float pwm_power=71*2.0/10.0;
 	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_power);
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pwm_power);
 	HAL_Delay(2000);
 	pwm_power=71*1/10.0;
 	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_power);
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pwm_power);
 	HAL_Delay(2000);
-	pwm_power=71*1.7/10.0;
-	float pwm_power2=71*1.8/10.0;
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_power2);
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pwm_power);
+  dbus_uart_init();
+
+
 
 	HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin,GPIO_PIN_RESET);
 	sprintf(buf,"Start up\n");
@@ -226,6 +248,9 @@ int main(void)
 
 	HAL_CAN_Start(&hcan1);
 	uint16_t val;
+
+	int16_t theta=0,x_dot=0,y_dot=0;
+	HAL_TIM_Base_Start_IT(&htim10);
 
   /* USER CODE END 2 */
 
@@ -239,27 +264,41 @@ int main(void)
     /* USER CODE BEGIN 3 */
 		uart_receive_handler(&huart1); //コントローラ値 受信
 
-		val=(int16_t)rc.ch1*0x01FF/660;
-		sprintf(buf, "CH1: %4d  CH2: %4d  CH3: %4d  CH4: %4d  SW1: %1d  SW2: %1d %x\r\n", rc.ch1, rc.ch2, rc.ch3, rc.ch4, rc.sw1, rc.sw2,val);
-		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
+//		sprintf(buf, "CH1: %4d  CH2: %4d  CH3: %4d  CH4: %4d  SW1: %1d  SW2: %1d %x\r\n", rc.ch1, rc.ch2, rc.ch3, rc.ch4, rc.sw1, rc.sw2,val);
 
-		mode=rc.sw1; // 動作モード設??��?��?
+		x_dot=rc.ch3*2;
+		y_dot=rc.ch4;
+		theta=rc.ch1*2;
 
-		//100Hz to 10ms
-		//1ms to 2ms 1.5ms
-		float pwm_power=9999*1.7/10.0;
+		v[0]=x_dot-y_dot+theta;
+		v[1]=-x_dot-y_dot+theta;
+		v[2]=-x_dot+y_dot+theta;
+		v[3]=x_dot+y_dot+theta;
+
+		for(uint8_t i=0;i<4;i++){
+			v[i]=v[i]*4;
+		}
+
+//		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
+
+		mode=rc.sw1; // 動作モード設???��?��??��?��?
 
 
-		if(mode==move||mode==launch){
+		if(mode==move){
+
+		}else{
 
 		}
 
 		if(mode==launch){
-
+			pwm_power=71*1.9/10.0;
+		}else{
+			pwm_power=71*1./10.0;
 		}
+		__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_power);
 
-		sprintf(buf,"%x%x  %x%x ",StateSW[0],tmp[1],tmp[2],tmp[3]);
-		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
+//		sprintf(buf,"%x%x  %x%x ",StateSW[0],tmp[1],tmp[2],tmp[3]);
+//		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
 
 //		SetMotorPower(0,-val);
 //		SetMotorPower(1,val);
@@ -270,27 +309,6 @@ int main(void)
 
 		//	SetMotorPower(2,rc.ch1*0x2FFF/660);
 
-//		if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&hcan1)){
-//		    TxHeader.StdId = 0x200;                 // CAN ID
-//		    TxHeader.RTR = CAN_RTR_DATA;            // フレー??��?��?タイプ�???��?��??��?��?ータフレー??��?��?
-//		    TxHeader.IDE = CAN_ID_STD;              // 標準ID(11???��?��??��?��??��?��?��???��?��?)
-//		    TxHeader.DLC = 8;                       // ??��?��?ータ長は8バイトに
-//		    TxHeader.TransmitGlobalTime = DISABLE;  // ???
-//		    TxData[0] = 0x11;
-//		    TxData[1] = 0x22;
-//		    TxData[2] = 0x33;
-//		    TxData[3] = 0x44;
-//		    TxData[4] = 0x55;
-//		    TxData[5] = 0x66;
-//		    TxData[6] = 0x77;
-//		    TxData[7] = 0x88;
-//		    if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
-//		    			{
-//		    				Error_Handler();
-//		    			}
-//		}
-
-//		HAL_Delay(10);
 		HAL_GPIO_TogglePin(LED_R_GPIO_Port, LED_R_Pin); //Lチカ
 		//		HAL_Delay(30);
 	}
