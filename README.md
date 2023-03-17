@@ -3,12 +3,19 @@
 STM32CubeIDE:https://www.st.com/ja/development-tools/stm32cubeide.html
 
 ## デフォルト状態
+![スライド1 (中)](https://user-images.githubusercontent.com/30413729/225855374-e91636c3-a87c-45c2-8ac4-dbb683fa182e.PNG)
+
+![スライド2 (中)](https://user-images.githubusercontent.com/30413729/225855480-e84f9ca8-6a9b-4770-82ff-3c94852b91e0.PNG)
 
 ## 操作方法
 1. バッテリーの電源を入れる
 2. バッテリーのスイッチをONにする
 3. コントローラの電源をONにする
 4. 非常停止スイッチを解除する
+
+### コントローラ割り当て
+![スライド3](https://user-images.githubusercontent.com/30413729/225855597-d3d1035f-ae37-4319-aa9e-9efa3adbf50e.PNG)
+
 
 ## 起こりそうな不具合＆解決法
 - コントローラで足回りを動かそうとしても動かない
