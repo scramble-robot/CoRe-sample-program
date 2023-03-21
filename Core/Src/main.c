@@ -19,9 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "can.h"
 #include "dma.h"
-#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -51,34 +49,8 @@
 /* Private variables ---------------------------------------------------------*/
 extern rc_info_t rc;
 uint8_t buf[200];
-uint8_t tmp[8];
+uint8_t tmp;
 
-CAN_TxHeaderTypeDef   TxHeader;
-CAN_RxHeaderTypeDef   RxHeader;
-
-uint8_t               TxData[8];
-uint8_t               RxData[8];
-uint32_t              TxMailbox;
-
-int16_t motorPower[8]={};
-
-enum OperatingMode {
-	stop=1,
-	move=3,
-	launch=2
-};
-
-enum MagazineChangeMode {
-	left=1,
-	LRstop=3,
-	right=2
-};
-
-uint8_t mode;
-
-static const uint16_t PwmPeriod = 57600;
-static const uint16_t ServoAngle0 = PwmPeriod * 0.5 / 20.0;
-static const uint16_t ServoAngle180 = PwmPeriod * 2.4 / 20.0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -89,214 +61,6 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan){
-  	if (HAL_CAN_GetRxMessage(&hcan1, CAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK){
-    		Error_Handler();
-  	}
-//  		xprintf(" id=%d [0]=%d [1]=%[2]=%d\r\n",RxHeader.StdId,RxData[0],RxData[1],RxData[2]);
-}
-
-int8_t SetMotorPower(uint8_t motorID,int16_t power){
-	uint8_t MaxmotorID=7;
-	uint8_t MinmotorID=0;
-
-	if((motorID<MinmotorID)||(MaxmotorID<motorID)){
-		return -1;
-	}
-	motorPower[motorID]=power;
-}
-
-void CANOutPut(){
-	if(0 < HAL_CAN_GetTxMailboxesFreeLevel(&hcan1)){
-		TxHeader.RTR = CAN_RTR_DATA;
-		TxHeader.IDE = CAN_ID_STD;
-		TxHeader.DLC = 8;
-		TxHeader.TransmitGlobalTime = DISABLE;
-
-		TxHeader.StdId = 0x200;
-		for(uint8_t i=0;i<4;i++){
-			TxData[i*2]=motorPower[i]>>8;
-			TxData[i*2+1]=motorPower[i];
-			tmp[i*2]=motorPower[i]>>8;
-			tmp[i*2+1]=motorPower[i];
-		}
-
-		if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
-		{
-			Error_Handler();
-		}
-
-		TxHeader.StdId = 0x1FF;
-		for(uint8_t i=0;i<4;i++){
-			TxData[i*2]=motorPower[i+4]>>8;
-			TxData[i*2+1]=motorPower[i+4];
-			tmp[i*2]=motorPower[i+4]>>8;
-			tmp[i*2+1]=motorPower[i+4];
-		}
-
-		if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
-		{
-			Error_Handler();
-		}
-
-	}
-}
-
-float pwm_power=0;
-uint32_t ReloadState=0;
-uint32_t underReloadState=0;
-int16_t v[8]={0};
-
-uint8_t launcherFlag=0;
-uint8_t launcherLR=LRstop;//
-uint16_t countLR=0;
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) //GPIO割込みピン入力割込み
-{
-	if(GPIO_Pin == GPIO_PIN_11){
-		if(HAL_GPIO_ReadPin(GPIOH, GPIO_PIN_11)){
-			if(underReloadState==0){
-				v[6]=0;
-			}
-			underReloadState=1;//waitting
-			ReloadState=0;
-			v[6]=0;
-		}
-	}
-	if(GPIO_Pin == GPIO_PIN_14){
-		if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_14)){
-			ReloadState=1;
-		}
-	}
-	if (GPIO_Pin == GPIO_PIN_0){
-		if(HAL_GPIO_ReadPin(GPIOI, GPIO_PIN_0)){
-			if(launcherLR==right){
-				countLR=0;
-				launcherFlag=0;
-				v[7]=0;
-			}
-		}
-	}
-	if (GPIO_Pin == GPIO_PIN_12){
-		if(HAL_GPIO_ReadPin(GPIOH, GPIO_PIN_12)){
-			if(launcherLR==left){
-				countLR=0;
-				launcherFlag=0;
-				v[7]=0;
-			}
-		}
-	}
-	if (GPIO_Pin == GPIO_PIN_10){
-			if(HAL_GPIO_ReadPin(GPIOH, GPIO_PIN_10)){
-					v[0]=0;
-					v[1]=0;
-					v[2]=0;
-					v[3]=0;
-					v[4]=0;
-					v[5]=0;
-					v[6]=0;
-					v[7]=0;
-					mode=stop;
-			}else{
-				mode=move;
-			}
-	}
-}
-
-uint8_t CANState=1;
-uint8_t launchFlag=0;
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-    if (htim == &htim10){
-    	if((mode==move)||(mode==launch)){
-			if (launchFlag==0){
-				if (ReloadState==0){
-					v[5]=0;
-				}
-				if(underReloadState==0){
-					v[6]=500;
-				}else if (underReloadState==1){
-					v[6]=0;
-				}
-			}else if(launcherFlag==0){
-				if(underReloadState==1){
-					if(ReloadState==0){
-						if(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_14)){
-							v[5]=-3000;
-							ReloadState=1;
-						}else{
-							v[5]=3000;
-						}
-					}else if(ReloadState>=700){
-						v[5]=0;
-						underReloadState=2;
-					}else if(ReloadState>=1){
-						v[5]=-4500;//behind the load
-						ReloadState++;
-					}
-				}else{
-					v[5]=0;
-				}
-			}
-
-
-			if(underReloadState>=2900*3){
-				v[6]=1800;
-			}else if(underReloadState>=4800){
-				underReloadState++;
-				v[6]=-2000;
-			}else if(underReloadState>=2){
-				underReloadState++;
-				v[6]=0;
-			}
-    	}
-
-    	if(v[7]!=0){
-    		countLR++;
-    		if(countLR>6000){
-    			countLR=0;
-    			v[7]=0;
-    			launcherFlag=0;
-    		}
-    	}
-
-		TxHeader.RTR = CAN_RTR_DATA;
-		TxHeader.IDE = CAN_ID_STD;
-		TxHeader.DLC = 8;
-		TxHeader.TransmitGlobalTime = DISABLE;
-    	if(CANState){
-			TxHeader.StdId = 0x200;
-			TxData[0] = v[0]>>8;
-			TxData[1] = v[0];
-			TxData[2] = v[1]>>8;
-			TxData[3] = v[1];
-			TxData[4] = v[2]>>8;
-			TxData[5] = v[2];
-			TxData[6] = v[3]>>8;
-			TxData[7] = v[3];
-			CANState=0;
-    	}else{
-    		TxHeader.StdId = 0x1FF;
-			TxData[0] = v[4]>>8;
-			TxData[1] = v[4];
-			TxData[2] = v[5]>>8;
-			TxData[3] = v[5];
-			TxData[4] = v[6]>>8;
-			TxData[5] = v[6];
-			TxData[6] = v[7]>>8;
-			TxData[7] = v[7];
-			CANState=1;
-    	}
-
-
-		if(HAL_CAN_AddTxMessage(&hcan1, &TxHeader, TxData, &TxMailbox) != HAL_OK)
-		{
-			Error_Handler();
-		}
-
-    }
-}
 
 /* USER CODE END 0 */
 
@@ -328,36 +92,15 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_CAN1_Init();
   MX_USART1_UART_Init();
-  MX_USART2_UART_Init();
-  MX_TIM2_Init();
-  MX_TIM10_Init();
+  MX_USART6_UART_Init();
   /* USER CODE BEGIN 2 */
 	/* open dbus uart receive it */
-	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
-	pwm_power=71*2.0/10.0;
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_power);
-	HAL_Delay(2000);
-	pwm_power=71*1/10.0;
-	__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_power);
-	HAL_Delay(2000);
   dbus_uart_init();
 
 	HAL_GPIO_WritePin(LED_G_GPIO_Port, LED_G_Pin,GPIO_PIN_RESET);
-	sprintf(buf,"Start up\n");
-	//	HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
 
-	HAL_CAN_Start(&hcan1);
-	uint16_t val;
-
-	int16_t theta=0,x_dot=0,y_dot=0;
-	HAL_TIM_Base_Start_IT(&htim10);
-
-	if(HAL_GPIO_ReadPin(GPIOH, GPIO_PIN_11)){
-			underReloadState=1;//waitting
-	}
-	countLR=0;
+	uint8_t loopNum=0;
 
   /* USER CODE END 2 */
 
@@ -369,85 +112,14 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+		loopNum++;
 		uart_receive_handler(&huart1); //コントローラ値 受信
-
-//		sprintf(buf, "CH1: %4d  CH2: %4d  CH3: %4d  CH4: %4d  SW1: %1d  SW2: %1d %x\r\n", rc.ch1, rc.ch2, rc.ch3, rc.ch4, rc.sw1, rc.sw2,val);
-
-		if(mode!=stop){
-
-			x_dot=rc.ch3*2;
-			y_dot=rc.ch4;
-			theta=rc.ch1*2;
-
-	    	if((v[6]==0)&&(mode==move)&&(v[5]==0)){
-	    			if(launcherLR!=rc.sw2){
-						launcherLR=rc.sw2;
-						launcherFlag=1;
-						if(launcherLR==left){
-							v[7]=1200;
-						}else{
-							v[7]=-1100;//To Right
-						}
-					}
-	    		}
-
-
-			if(launcherFlag==0){
-				if(mode==launch){
-					pwm_power=71*1.95/10.0;
-					launchFlag=1;
-				}else{
-					pwm_power=71*1./10.0;
-					launchFlag=0;
-				}
-				__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_power);
-			}
-
-			//matrix calculation
-			v[0]=x_dot-y_dot+theta;
-			v[1]=-x_dot-y_dot+theta;
-			v[2]=-x_dot+y_dot+theta;
-			v[3]=x_dot+y_dot+theta;
-
-			for(uint8_t i=0;i<4;i++){
-				v[i]=v[i]*9/2;//velocity coefficient
-			}
-			mode=rc.sw1;
-			if(HAL_GPIO_ReadPin(GPIOH, GPIO_PIN_10)){
-				v[0]=0;
-				v[1]=0;
-				v[2]=0;
-				v[3]=0;
-				v[4]=0;
-				v[5]=0;
-				v[6]=0;
-				v[7]=0;
-				mode=stop;
-			}
-//		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
-		}else{
-			if(HAL_GPIO_ReadPin(GPIOH, GPIO_PIN_10)){
-				v[0]=0;
-				v[1]=0;
-				v[2]=0;
-				v[3]=0;
-				v[4]=0;
-				v[5]=0;
-				v[6]=0;
-				v[7]=0;
-				mode=stop;
-			}else{
-				mode=rc.sw1;
-			}
-			pwm_power=71*1./10.0;
-			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pwm_power);
+		if(loopNum>1){//送信周期間引き
+			sprintf(buf, "%04d%04d%04d%04d%01d%01d\n", rc.ch1, rc.ch2, rc.ch3, rc.ch4,rc.sw1,rc.sw2); //スティック4文字（-660～0660）x4,スイッチ1文字(1,3,2)x2,\n
+			HAL_UART_Transmit( &huart6, buf, strlen(buf), 0xFFFF );//Serial 送信
+			loopNum=0;//カウンター初期化
 		}
-
-//
-////		sprintf(buf,"%x%x  %x%x ",StateSW[0],tmp[1],tmp[2],tmp[3]);
-////		HAL_UART_Transmit( &huart2, buf, strlen(buf), 0xFFFF );
-//
-//
+		HAL_Delay(1);
 	}
 
   /* USER CODE END 3 */
